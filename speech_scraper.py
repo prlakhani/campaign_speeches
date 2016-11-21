@@ -73,20 +73,24 @@ def save_candidate_speeches(candidate_name, candidate_url, election_year):
 
     # save transcripts and combined file
     for link in speech_links:
-        speech_page = requests.get(link)
-        speech_content = BeautifulSoup(speech_page.text, 'html.parser')
-        speech_title = speech_content.select_one('span.paperstitle').text
-        speech_date = speech_content.select_one('span.docdate').text
-        speech = speech_content.select_one('span.displaytext').text
         speech_id = re.search('\?pid=(?P<pid>[0-9]+)$', link).group('pid')
-        with open(os.path.join(candidate_path, speech_id + '.txt'), 'w') as f:
-            f.write(os.linesep.join([speech_title, speech_date, speech]))
-        # unclear given the size of these writes whether keeping all speech text
-        # in a giant string and writing to all_speeches.txt  once, or
-        # continually opening and appending to a running file is better. The
-        # latter is slower, but safer if errors occur during this loop.
-        with open(os.path.join(candidate_path, 'all_speeches.txt'), 'a') as fall:
-            fall.write(speech + os.linesep)
+        # Only re-download (and more importantly, append to all_speeches) if
+        # this has not already been done for this file. Assumes files don't
+        # change over time (better transcriptions, etc.).
+        if not os.path.isfile(os.path.join(candidate_path, speech_id + '.txt')):
+            speech_page = requests.get(link)
+            speech_content = BeautifulSoup(speech_page.text, 'html.parser')
+            speech_title = speech_content.select_one('span.paperstitle').text
+            speech_date = speech_content.select_one('span.docdate').text
+            speech = speech_content.select_one('span.displaytext').text
+            with open(os.path.join(candidate_path, speech_id + '.txt'), 'w') as f:
+                f.write(os.linesep.join([speech_title, speech_date, speech]))
+            # unclear given the size of these writes whether keeping all speech text
+            # in a giant string and writing to all_speeches.txt  once, or
+            # continually opening and appending to a running file is better. The
+            # latter is slower, but safer if errors occur during this loop.
+            with open(os.path.join(candidate_path, 'all_speeches.txt'), 'a') as fall:
+                fall.write(speech + os.linesep)
 
 
 def main(args):
@@ -127,6 +131,7 @@ def main(args):
             candidate_url = candidates[candidate_name]
 
     save_candidate_speeches(candidate_name, candidate_url, election_year)
+
 
 if __name__ == '__main__':
     from argparse import ArgumentParser

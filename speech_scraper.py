@@ -10,7 +10,7 @@ import os
 app_url = "http://www.presidency.ucsb.edu/"
 
 def get_available_elections():
-    """Gets list of li tags of available elections"""
+    """Gets dict like {election year: election url} for all available elections"""
 
     docs_url = app_url + "index_docs.php"
     docs_page = requests.get(docs_url)
@@ -21,7 +21,11 @@ def get_available_elections():
 
     elections_available_list = elections_title.parent.ul.select('li')
 
-    return elections_available_list
+    election_links = {election.text.replace(' Election',''):
+            app_url + election.a.get('href')
+            for election in elections_available_list}
+
+    return election_links
 
 
 def get_candidate_speech_links(election_url):
@@ -85,9 +89,52 @@ def save_candidate_speeches(candidate_name, candidate_url, election_year):
             fall.write(speech + os.linesep)
 
 
-def main():
-    pass
+def main(args):
+    elections = get_available_elections()
+    election_year = str(args.year)
+    if election_year not in elections:
+        year_options = "Your options are: {}".format(
+                ", ".join(sorted(elections.keys())))
+        raise ValueError("No speeches for this year. "+year_options)
 
+    candidates = get_candidate_speech_links(elections[election_year])
+    candidate_name = None
+    candidate_url = None
+    search_string = args.candidate.strip()
+
+    while not search_string:
+        # prompt for candidate based on available ones
+        prompt = "Pick a candidate from {}: ".format(
+                election_year, ", ".join(candidates.keys()))
+        search_string = input(prompt)
+
+    while not candidate_name:
+        # try to match search string
+        search_matches = [candidate for candidate in candidates
+                if search_string.lower() in candidate.lower()]
+
+        if not search_matches:
+            prompt = ("Sorry, no matches to your candidate search string. "
+                    "It must be one of {}: ".format(", ".join(candidates.keys())))
+            search_string = input(prompt)
+        elif len(search_matches) > 1:
+            prompt = ("Multiple candidates match your search string: {}. "
+                    "Please enter a more specific search string: ".format(
+                        ", ".join(search_matches)))
+            search_string = input(prompt)
+        else:
+            candidate_name = search_matches[0]
+            candidate_url = candidates[candidate_name]
+
+    save_candidate_speeches(candidate_name, candidate_url, election_year)
 
 if __name__ == '__main__':
-    main()
+    from argparse import ArgumentParser
+    parser = ArgumentParser(
+        description="Save speech transcripts given an election year and candidate")
+    parser.add_argument('-y', '--year', type=int, required=True,
+            help="Election year from which to scrape speech transcripts")
+    parser.add_argument('-c', '--candidate', type=str,
+            help="Candidate name search string. Remember to quote if it has spaces")
+    args = parser.parse_args()
+    main(args)
